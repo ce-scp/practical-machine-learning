@@ -1,0 +1,132 @@
+---
+title: "Prediction Assignment"
+author: "Christian Edelmayer"
+date: "6 7 2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Summary
+
+# Setup
+
+```{r}
+library(caret)
+library(dplyr)
+library(randomForest)
+```
+
+# Loading & Reading Data
+
+```{r}
+trainingRaw <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testingRaw <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+# Data Exploration & Preprocessing
+
+```{r}
+dim(trainingRaw)
+
+dim(testingRaw)
+```
+
+We can see that the training set consists of 19622 observations, while the testing set consists of only 20 observations. Each observation consists of 160 variables.
+
+Let's look at the variables.
+
+```{r}
+str(trainingRaw)
+```
+
+We have a lot of variables (160), so we obviously have to reduce that number. Also, a lot of variables seem to be NA, so we decide to simply omit all variables with NA values. Note that this is a very simply imputation method and more advanced methods could be tried instead.
+
+```{r}
+training <- trainingRaw[, colSums(is.na(trainingRaw)) == 0]
+testing <- testingRaw[, colSums(is.na(testingRaw)) == 0]
+```
+
+Now let's take another look.
+
+```{r}
+dim(training)
+dim(testing)
+```
+
+That's better, but there are still too many variables. Let's remove some more columns.
+
+```{r}
+y <- training$classe
+
+training <- training[, sapply(training, is.numeric)]
+testing <- testing[, sapply(testing, is.numeric)]
+
+training <- training %>% select(-X, -raw_timestamp_part_1, -raw_timestamp_part_2, -num_window)
+testing <- testing %>% select(-X, -raw_timestamp_part_1, -raw_timestamp_part_2, -num_window, -problem_id)
+
+training$classe <- y
+```
+
+``````{r}
+dim(training)
+dim(testing)
+```
+
+# Data Preparation
+
+We now want to split our training data into a train and a validation set.
+
+```{r}
+set.seed(42)
+
+inTrain <- createDataPartition(training$classe, p = .7, list = FALSE)
+
+train <- training[inTrain,]
+val <- training[-inTrain,]
+```
+
+# Model Fit
+
+Let's now use a random forest classifier for our training data. The random forest classifier was chosen because in the lectures we were told that they perform very good out of the box for most cases. We use 5 fold cross validation and 100 trees.
+
+```{r}
+rf <- train(classe ~ ., data = train, method="rf", trControl = trainControl(method = "cv", 5), ntree=100)
+
+rf
+```
+
+On the test set we a get a very high accuracy.
+
+
+```{r}
+valPrediction <- predict(rf, val)
+cf <- confusionMatrix(valPrediction, as.factor(val$classe))
+cf
+```
+
+And we also get a very high accuracy on the validation set.
+
+Now let's look at the out of sample error.
+
+```{r}
+outOfSampleError <- 1 - cf$overall[1]
+
+outOfSampleError
+```
+
+# Predict Test Data
+
+Finally, we use our classifier to predict the test data.
+
+
+```{r}
+testPrediction <- predict(rf, testing)
+
+
+testPrediction
+```
